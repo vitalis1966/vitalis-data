@@ -1,0 +1,64 @@
+name: Sync Saskatoon Building Permits CSV
+
+on:
+  schedule:
+    - cron: '0 6 * * 2'   # Every Tuesday 6am UTC
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Download and convert Saskatoon GeoJSON to CSV
+        run: |
+          python3 - <<'EOF'
+          import requests, csv, os, json
+
+          url = "https://opendata.arcgis.com/api/v3/datasets/68ba7b38073f4cd4aee38d2b59afcaf4_12/downloads/data?format=geojson&spatialRefId=4326&where=1%3D1"
+          print(f"Downloading Saskatoon building permits GeoJSON...")
+          r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=120)
+          print(f"Status: {r.status_code}, Size: {len(r.content)} bytes")
+          r.raise_for_status()
+
+          data = r.json()
+          features = data.get("features", [])
+          print(f"Features: {len(features)}")
+
+          if not features:
+            print("No features found — aborting")
+            exit(1)
+
+          # Collect all property keys from first feature for headers
+          headers = list(features[0]["properties"].keys())
+          print(f"Headers: {headers}")
+
+          os.makedirs("saskatoon", exist_ok=True)
+          out_path = "saskatoon/BuildingPermits.csv"
+
+          with open(out_path, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=headers, extrasaction="ignore")
+            writer.writeheader()
+            for feat in features:
+              props = feat.get("properties", {})
+              # Convert all values to strings for CSV
+              row = {k: ("" if v is None else str(v)) for k, v in props.items()}
+              writer.writerow(row)
+
+          print(f"Done: {out_path} ({len(features)} rows)")
+          EOF
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add saskatoon/
+          git stash
+          git pull --rebase origin main
+          git stash pop
+          git diff --staged --quiet || git commit -m "Auto-update Saskatoon building permits CSV"
+          git push
