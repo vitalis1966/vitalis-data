@@ -19,7 +19,7 @@ jobs:
           python3 - <<'EOF'
           import requests, csv, os, json
 
-          url = "https://opendata.arcgis.com/api/v3/datasets/68ba7b38073f4cd4aee38d2b59afcaf4_12/downloads/data?format=geojson&spatialRefId=4326&where=1%3D1"
+          url = "https://data-cos-gis.opendata.arcgis.com/api/download/v1/items/68ba7b38073f4cd4aee38d2b59afcaf4/csv?layers=12"
           print(f"Downloading Saskatoon building permits GeoJSON...")
           r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=120)
           print(f"Status: {r.status_code}, Size: {len(r.content)} bytes")
