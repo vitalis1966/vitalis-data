@@ -2,7 +2,7 @@ name: Sync Regina Building Permits CSV
 
 on:
   schedule:
-    - cron: '0 8 * * 5'   # Every Friday 8am UTC (Regina updates Thursdays)
+    - cron: '0 8 * * 5'
   workflow_dispatch:
 
 jobs:
@@ -14,30 +14,52 @@ jobs:
       - name: Install dependencies
         run: pip install openpyxl requests
 
-      - name: Download and convert Regina 2026 XLSX to CSV
+      - name: Download and convert Regina 2026
         run: |
           python3 - <<'EOF'
           import requests, openpyxl, io, csv, os
-
+          os.makedirs("regina", exist_ok=True)
           url = "https://openregina.ca/dataset/c5ffc5b5-7448-4dfa-9962-ca1b6396adb6/resource/dcea70fc-87dd-4e04-bc34-b3ce6580daac/download/building-permit-report-2026-32.xlsx"
-          r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=30)
+          print(f"Downloading 2026...")
+          r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=60)
+          print(f"Status: {r.status_code}")
           r.raise_for_status()
           wb = openpyxl.load_workbook(io.BytesIO(r.content), read_only=True, data_only=True)
           ws = wb.active
-          os.makedirs("regina", exist_ok=True)
           with open("regina/BuildingPermits2026.csv", "w", newline="", encoding="utf-8") as f:
-              writer = csv.writer(f)
-              for row in ws.iter_rows(values_only=True):
-                  if any(cell is not None for cell in row):
-                      writer.writerow([str(c) if c is not None else "" for c in row])
+            writer = csv.writer(f)
+            for row in ws.iter_rows(values_only=True):
+              if any(cell is not None for cell in row):
+                writer.writerow([str(c) if c is not None else "" for c in row])
           wb.close()
-          print("Done: regina/BuildingPermits2026.csv")
+          print("Done 2026")
+          EOF
+
+      - name: Download and convert Regina 2025
+        run: |
+          python3 - <<'EOF'
+          import requests, openpyxl, io, csv, os
+          os.makedirs("regina", exist_ok=True)
+          url = "https://openregina.ca/dataset/c5ffc5b5-7448-4dfa-9962-ca1b6396adb6/resource/fe0e6c60-6279-4c3c-959b-90dde186aa34/download/53-building-permit-report-2025.xlsx"
+          print(f"Downloading 2025...")
+          r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=60)
+          print(f"Status: {r.status_code}")
+          r.raise_for_status()
+          wb = openpyxl.load_workbook(io.BytesIO(r.content), read_only=True, data_only=True)
+          ws = wb.active
+          with open("regina/BuildingPermits2025.csv", "w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            for row in ws.iter_rows(values_only=True):
+              if any(cell is not None for cell in row):
+                writer.writerow([str(c) if c is not None else "" for c in row])
+          wb.close()
+          print("Done 2025")
           EOF
 
       - name: Commit and push
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add regina/BuildingPermits2026.csv
-          git diff --staged --quiet || git commit -m "Auto-update Regina building permits 2026"
+          git add regina/
+          git diff --staged --quiet || git commit -m "Auto-update Regina building permits CSVs"
           git push
