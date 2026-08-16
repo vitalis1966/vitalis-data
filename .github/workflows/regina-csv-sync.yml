@@ -14,46 +14,34 @@ jobs:
       - name: Install dependencies
         run: pip install openpyxl requests
 
-      - name: Download and convert Regina 2026
+      - name: Download and convert both years
         run: |
           python3 - <<'EOF'
           import requests, openpyxl, io, csv, os
           os.makedirs("regina", exist_ok=True)
-          url = "https://openregina.ca/dataset/c5ffc5b5-7448-4dfa-9962-ca1b6396adb6/resource/dcea70fc-87dd-4e04-bc34-b3ce6580daac/download/building-permit-report-2026-32.xlsx"
-          print(f"Downloading 2026...")
-          r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=60)
-          print(f"Status: {r.status_code}")
-          r.raise_for_status()
-          wb = openpyxl.load_workbook(io.BytesIO(r.content), read_only=True, data_only=True)
-          ws = wb.active
-          with open("regina/BuildingPermits2026.csv", "w", newline="", encoding="utf-8") as f:
-            writer = csv.writer(f)
-            for row in ws.iter_rows(values_only=True):
-              if any(cell is not None for cell in row):
-                writer.writerow([str(c) if c is not None else "" for c in row])
-          wb.close()
-          print("Done 2026")
-          EOF
 
-      - name: Download and convert Regina 2025
-        run: |
-          python3 - <<'EOF'
-          import requests, openpyxl, io, csv, os
-          os.makedirs("regina", exist_ok=True)
-          url = "https://openregina.ca/dataset/c5ffc5b5-7448-4dfa-9962-ca1b6396adb6/resource/fe0e6c60-6279-4c3c-959b-90dde186aa34/download/53-building-permit-report-2025.xlsx"
-          print(f"Downloading 2025...")
-          r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=60)
-          print(f"Status: {r.status_code}")
-          r.raise_for_status()
-          wb = openpyxl.load_workbook(io.BytesIO(r.content), read_only=True, data_only=True)
-          ws = wb.active
-          with open("regina/BuildingPermits2025.csv", "w", newline="", encoding="utf-8") as f:
-            writer = csv.writer(f)
-            for row in ws.iter_rows(values_only=True):
-              if any(cell is not None for cell in row):
-                writer.writerow([str(c) if c is not None else "" for c in row])
-          wb.close()
-          print("Done 2025")
+          files = [
+            ("regina/BuildingPermits2026.csv", "https://openregina.ca/dataset/c5ffc5b5-7448-4dfa-9962-ca1b6396adb6/resource/dcea70fc-87dd-4e04-bc34-b3ce6580daac/download/building-permit-report-2026-32.xlsx", "2026"),
+            ("regina/BuildingPermits2025.csv", "https://openregina.ca/dataset/c5ffc5b5-7448-4dfa-9962-ca1b6396adb6/resource/fe0e6c60-6279-4c3c-959b-90dde186aa34/download/53-building-permit-report-2025.xlsx", "2025"),
+          ]
+
+          for out_path, url, year in files:
+            print(f"Downloading {year} from {url}")
+            try:
+              r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=60)
+              print(f"Status {year}: {r.status_code}")
+              r.raise_for_status()
+              wb = openpyxl.load_workbook(io.BytesIO(r.content), read_only=True, data_only=True)
+              ws = wb.active
+              with open(out_path, "w", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f)
+                for row in ws.iter_rows(values_only=True):
+                  if any(cell is not None for cell in row):
+                    writer.writerow([str(c) if c is not None else "" for c in row])
+              wb.close()
+              print(f"Done: {out_path}")
+            except Exception as e:
+              print(f"ERROR {year}: {e}")
           EOF
 
       - name: Commit and push
@@ -61,5 +49,6 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add regina/
+          git pull --rebase origin main
           git diff --staged --quiet || git commit -m "Auto-update Regina building permits CSVs"
           git push
