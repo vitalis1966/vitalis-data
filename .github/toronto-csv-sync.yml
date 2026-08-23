@@ -1,0 +1,71 @@
+name: Sync Toronto Building Permits CSV
+on:
+  schedule:
+    - cron: '0 7 * * 3'   # Every Wednesday 7am UTC
+  workflow_dispatch:
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: pip install requests
+      - name: Download and filter Toronto building permits
+        run: |
+          python3 - <<'EOF'
+          import requests, csv, io, os
+
+          url = "https://ckan0.cf.opendata.inter.prod-toronto.ca/dataset/108c2bd1-6945-46f6-af92-02f5658ee7f7/resource/dfce3b7b-4f17-4a9d-9155-5e390a5ffa97/download/building-permits-active-permits.csv"
+          MED_TERMS = [
+            "medical","physician","dental","clinic","health centre","health center",
+            "optom","physiotherapy","pharmacy","chiropractic","radiolog","diagnostic",
+            "laboratory","outpatient","nursing","ophthalmolog","physio","audiolog",
+            "speech therapy","medical building","doctor","allied health",
+            "health care service","health care","veterinary","veterinarian",
+            "animal hospital","pet clinic","animal clinic","animal care","vet clinic",
+          ]
+          STRUCTURE_TYPES = [
+            "long term care facility","nursing home","hospital","medical",
+            "dental","veterinary","clinic","health",
+          ]
+
+          print(f"Downloading Toronto building permits CSV (~70MB)...")
+          r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=300, stream=True)
+          print(f"Status: {r.status_code}")
+          r.raise_for_status()
+
+          os.makedirs("toronto", exist_ok=True)
+          out_path = "toronto/BuildingPermits.csv"
+
+          content = r.content.decode("utf-8-sig")
+          reader = csv.DictReader(io.StringIO(content))
+          matched = 0
+          total = 0
+
+          with open(out_path, "w", newline="", encoding="utf-8") as f:
+            writer = None
+            for row in reader:
+              total += 1
+              desc = (row.get("DESCRIPTION") or "").lower()
+              struct = (row.get("STRUCTURE_TYPE") or "").lower()
+              proposed = (row.get("PROPOSED_USE") or "").lower()
+              combined = f"{desc} {struct} {proposed}"
+              if any(t in combined for t in MED_TERMS) or any(t in struct for t in STRUCTURE_TYPES):
+                if writer is None:
+                  writer = csv.DictWriter(f, fieldnames=reader.fieldnames)
+                  writer.writeheader()
+                writer.writerow(row)
+                matched += 1
+
+          print(f"Done: {total} total rows, {matched} matched → {out_path}")
+          EOF
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add toronto/
+          git stash
+          git pull --rebase origin main
+          git stash pop
+          git diff --staged --quiet || git commit -m "Auto-update Toronto building permits CSV"
+          git push
