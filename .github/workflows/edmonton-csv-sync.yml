@@ -16,43 +16,19 @@ jobs:
           mkdir -p edmonton
           curl -s "https://data.edmonton.ca/resource/jsf3-5dv2.json?\$limit=50000&\$order=permit_date+DESC" \
             -H "Accept: application/json" -o edmonton/bp_raw.json
-          python3 -c "
-import json, csv, sys
-with open('edmonton/bp_raw.json') as f:
-    data = json.load(f)
-if not data:
-    sys.exit(0)
-keys = list(data[0].keys())
-with open('edmonton/BuildingPermits.csv', 'w', newline='') as out:
-    writer = csv.DictWriter(out, fieldnames=keys)
-    writer.writeheader()
-    for row in data:
-        if 'location' in row and isinstance(row['location'], dict):
-            row['location'] = str(row['location'].get('human_address', ''))
-        writer.writerow({k: row.get(k, '') for k in keys})
-"
+
+      - name: Convert BP JSON to CSV
+        run: python3 scripts/json_to_csv.py edmonton/bp_raw.json edmonton/BuildingPermits.csv
 
       - name: Fetch Edmonton Development Permits
         run: |
           curl -s "https://data.edmonton.ca/resource/2ccn-pwtu.json?\$limit=50000&\$order=permit_date+DESC" \
             -H "Accept: application/json" -o edmonton/dev_raw.json
-          python3 -c "
-import json, csv, sys
-with open('edmonton/dev_raw.json') as f:
-    data = json.load(f)
-if not data:
-    sys.exit(0)
-keys = list(data[0].keys())
-with open('edmonton/DevPermits.csv', 'w', newline='') as out:
-    writer = csv.DictWriter(out, fieldnames=keys)
-    writer.writeheader()
-    for row in data:
-        if 'location' in row and isinstance(row['location'], dict):
-            row['location'] = str(row['location'].get('human_address', ''))
-        writer.writerow({k: row.get(k, '') for k in keys})
-"
 
-      - name: Cleanup raw JSON
+      - name: Convert Dev JSON to CSV
+        run: python3 scripts/json_to_csv.py edmonton/dev_raw.json edmonton/DevPermits.csv
+
+      - name: Cleanup
         run: rm -f edmonton/bp_raw.json edmonton/dev_raw.json
 
       - name: Commit and push
