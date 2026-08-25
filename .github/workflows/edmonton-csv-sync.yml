@@ -1,40 +1,109 @@
-name: Sync Edmonton Building Permits
-
+name: Sync Edmonton Building Permits CSV
 on:
   schedule:
-    - cron: '0 6 * * *'
+    - cron: '0 7 * * 3'   # Every Wednesday 7am UTC
   workflow_dispatch:
-
 jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Fetch Edmonton Building Permits
+      - name: Install dependencies
+        run: pip install requests
+      - name: Download Edmonton Building Permits
         run: |
-          mkdir -p edmonton
-          curl -s "https://data.edmonton.ca/resource/jsf3-5dv2.json?\$limit=50000&\$order=permit_date+DESC" \
-            -H "Accept: application/json" -o edmonton/bp_raw.json
+          python3 - <<'EOF'
+          import requests, csv, io, os, json
 
-      - name: Convert BP JSON to CSV
-        run: python3 scripts/json_to_csv.py edmonton/bp_raw.json edmonton/BuildingPermits.csv
+          MED_TERMS = [
+            "medical","physician","dental","clinic","health centre","health center",
+            "optom","physiotherapy","pharmacy","chiropractic","radiolog","diagnostic",
+            "laboratory","outpatient","nursing","ophthalmolog","physio","audiolog",
+            "speech therapy","medical building","doctor","allied health",
+            "health care service","health care","veterinary","veterinarian",
+            "animal hospital","pet clinic","animal clinic","animal care","vet clinic",
+          ]
 
-      - name: Fetch Edmonton Development Permits
+          url = "https://data.edmonton.ca/resource/jsf3-5dv2.json?$limit=50000&$order=permit_date+DESC"
+          print("Downloading Edmonton building permits...")
+          r = requests.get(url, headers={"Accept": "application/json"}, timeout=300)
+          print(f"Status: {r.status_code}")
+          r.raise_for_status()
+
+          data = r.json()
+          print(f"Total records fetched: {len(data)}")
+
+          os.makedirs("edmonton", exist_ok=True)
+          out_path = "edmonton/BuildingPermits.csv"
+
+          matched = 0
+          with open(out_path, "w", newline="", encoding="utf-8") as f:
+            writer = None
+            for row in data:
+              desc = (row.get("job_description") or "").lower()
+              if any(t in desc for t in MED_TERMS):
+                # Flatten location object if present
+                if "location" in row and isinstance(row["location"], dict):
+                  loc = row["location"]
+                  row["house_number"] = loc.get("human_address", "")
+                  row["location"] = ""
+                if writer is None:
+                  writer = csv.DictWriter(f, fieldnames=list(row.keys()))
+                  writer.writeheader()
+                writer.writerow(row)
+                matched += 1
+
+          print(f"Done: {len(data)} total, {matched} matched → {out_path}")
+          EOF
+      - name: Download Edmonton Development Permits
         run: |
-          curl -s "https://data.edmonton.ca/resource/2ccn-pwtu.json?\$limit=50000&\$order=permit_date+DESC" \
-            -H "Accept: application/json" -o edmonton/dev_raw.json
+          python3 - <<'EOF'
+          import requests, csv, io, os, json
 
-      - name: Convert Dev JSON to CSV
-        run: python3 scripts/json_to_csv.py edmonton/dev_raw.json edmonton/DevPermits.csv
+          MED_TERMS = [
+            "medical","physician","dental","clinic","health centre","health center",
+            "optom","physiotherapy","pharmacy","chiropractic","radiolog","diagnostic",
+            "laboratory","outpatient","nursing","ophthalmolog","physio","audiolog",
+            "speech therapy","medical building","doctor","allied health",
+            "health care service","health care","veterinary","veterinarian",
+            "animal hospital","pet clinic","animal clinic","animal care","vet clinic",
+          ]
 
-      - name: Cleanup
-        run: rm -f edmonton/bp_raw.json edmonton/dev_raw.json
+          url = "https://data.edmonton.ca/resource/2ccn-pwtu.json?$limit=50000&$order=permit_date+DESC"
+          print("Downloading Edmonton development permits...")
+          r = requests.get(url, headers={"Accept": "application/json"}, timeout=300)
+          print(f"Status: {r.status_code}")
+          r.raise_for_status()
 
+          data = r.json()
+          print(f"Total records fetched: {len(data)}")
+
+          os.makedirs("edmonton", exist_ok=True)
+          out_path = "edmonton/DevPermits.csv"
+
+          matched = 0
+          with open(out_path, "w", newline="", encoding="utf-8") as f:
+            writer = None
+            for row in data:
+              desc = (row.get("description_of_development") or "").lower()
+              if any(t in desc for t in MED_TERMS):
+                if "location" in row and isinstance(row["location"], dict):
+                  row["location"] = ""
+                if writer is None:
+                  writer = csv.DictWriter(f, fieldnames=list(row.keys()))
+                  writer.writeheader()
+                writer.writerow(row)
+                matched += 1
+
+          print(f"Done: {len(data)} total, {matched} matched → {out_path}")
+          EOF
       - name: Commit and push
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add edmonton/
-          git diff --staged --quiet || git commit -m "chore: sync Edmonton permits $(date -u +%Y-%m-%d)"
+          git stash
+          git pull --rebase origin main
+          git stash pop
+          git diff --staged --quiet || git commit -m "Auto-update Edmonton building permits CSV"
           git push
