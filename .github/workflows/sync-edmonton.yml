@@ -1,0 +1,58 @@
+name: Sync Edmonton Building Permits
+
+on:
+  schedule:
+    - cron: '0 6 * * *'  # Daily at 6am UTC
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch Edmonton Building Permits
+        run: |
+          mkdir -p edmonton
+          curl -s "https://data.edmonton.ca/resource/jsf3-5dv2.json?\$limit=50000&\$order=permit_date+DESC" \
+            -H "Accept: application/json" \
+            | python3 -c "
+import json, csv, sys
+data = json.load(sys.stdin)
+if not data:
+    sys.exit(0)
+keys = list(data[0].keys())
+writer = csv.DictWriter(sys.stdout, fieldnames=keys)
+writer.writeheader()
+for row in data:
+    # Flatten location object if present
+    if 'location' in row and isinstance(row['location'], dict):
+        row['location'] = ''
+    writer.writerow({k: row.get(k, '') for k in keys})
+" > edmonton/BuildingPermits.csv
+
+      - name: Fetch Edmonton Development Permits
+        run: |
+          curl -s "https://data.edmonton.ca/resource/2ccn-pwtu.json?\$limit=50000&\$order=permit_date+DESC" \
+            -H "Accept: application/json" \
+            | python3 -c "
+import json, csv, sys
+data = json.load(sys.stdin)
+if not data:
+    sys.exit(0)
+keys = list(data[0].keys())
+writer = csv.DictWriter(sys.stdout, fieldnames=keys)
+writer.writeheader()
+for row in data:
+    if 'location' in row and isinstance(row['location'], dict):
+        row['location'] = ''
+    writer.writerow({k: row.get(k, '') for k in keys})
+" > edmonton/DevPermits.csv
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add edmonton/
+          git diff --staged --quiet || git commit -m "chore: sync Edmonton permits $(date -u +%Y-%m-%d)"
+          git push
