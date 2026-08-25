@@ -2,7 +2,7 @@ name: Sync Edmonton Building Permits
 
 on:
   schedule:
-    - cron: '0 6 * * *'  # Daily at 6am UTC
+    - cron: '0 6 * * *'
   workflow_dispatch:
 
 jobs:
@@ -15,39 +15,45 @@ jobs:
         run: |
           mkdir -p edmonton
           curl -s "https://data.edmonton.ca/resource/jsf3-5dv2.json?\$limit=50000&\$order=permit_date+DESC" \
-            -H "Accept: application/json" \
-            | python3 -c "
+            -H "Accept: application/json" -o edmonton/bp_raw.json
+          python3 -c "
 import json, csv, sys
-data = json.load(sys.stdin)
+with open('edmonton/bp_raw.json') as f:
+    data = json.load(f)
 if not data:
     sys.exit(0)
 keys = list(data[0].keys())
-writer = csv.DictWriter(sys.stdout, fieldnames=keys)
-writer.writeheader()
-for row in data:
-    # Flatten location object if present
-    if 'location' in row and isinstance(row['location'], dict):
-        row['location'] = ''
-    writer.writerow({k: row.get(k, '') for k in keys})
-" > edmonton/BuildingPermits.csv
+with open('edmonton/BuildingPermits.csv', 'w', newline='') as out:
+    writer = csv.DictWriter(out, fieldnames=keys)
+    writer.writeheader()
+    for row in data:
+        if 'location' in row and isinstance(row['location'], dict):
+            row['location'] = str(row['location'].get('human_address', ''))
+        writer.writerow({k: row.get(k, '') for k in keys})
+"
 
       - name: Fetch Edmonton Development Permits
         run: |
           curl -s "https://data.edmonton.ca/resource/2ccn-pwtu.json?\$limit=50000&\$order=permit_date+DESC" \
-            -H "Accept: application/json" \
-            | python3 -c "
+            -H "Accept: application/json" -o edmonton/dev_raw.json
+          python3 -c "
 import json, csv, sys
-data = json.load(sys.stdin)
+with open('edmonton/dev_raw.json') as f:
+    data = json.load(f)
 if not data:
     sys.exit(0)
 keys = list(data[0].keys())
-writer = csv.DictWriter(sys.stdout, fieldnames=keys)
-writer.writeheader()
-for row in data:
-    if 'location' in row and isinstance(row['location'], dict):
-        row['location'] = ''
-    writer.writerow({k: row.get(k, '') for k in keys})
-" > edmonton/DevPermits.csv
+with open('edmonton/DevPermits.csv', 'w', newline='') as out:
+    writer = csv.DictWriter(out, fieldnames=keys)
+    writer.writeheader()
+    for row in data:
+        if 'location' in row and isinstance(row['location'], dict):
+            row['location'] = str(row['location'].get('human_address', ''))
+        writer.writerow({k: row.get(k, '') for k in keys})
+"
+
+      - name: Cleanup raw JSON
+        run: rm -f edmonton/bp_raw.json edmonton/dev_raw.json
 
       - name: Commit and push
         run: |
