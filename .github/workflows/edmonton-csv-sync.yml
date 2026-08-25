@@ -81,21 +81,28 @@ jobs:
           os.makedirs("edmonton", exist_ok=True)
           out_path = "edmonton/DevPermits.csv"
 
-          matched = 0
-          with open(out_path, "w", newline="", encoding="utf-8") as f:
-            writer = None
-            for row in data:
-              desc = (row.get("description_of_development") or "").lower()
-              if any(t in desc for t in MED_TERMS):
-                if "location" in row and isinstance(row["location"], dict):
-                  row["location"] = ""
-                if writer is None:
-                  writer = csv.DictWriter(f, fieldnames=list(row.keys()))
-                  writer.writeheader()
-                writer.writerow(row)
-                matched += 1
+          # Filter first, then collect all unique keys across matched rows
+          matched_rows = []
+          all_keys = []
+          seen_keys = set()
+          for row in data:
+            desc = (row.get("description_of_development") or "").lower()
+            if any(t in desc for t in MED_TERMS):
+              if "location" in row and isinstance(row["location"], dict):
+                row["location"] = ""
+              for k in row.keys():
+                if k not in seen_keys:
+                  all_keys.append(k)
+                  seen_keys.add(k)
+              matched_rows.append(row)
 
-          print(f"Done: {len(data)} total, {matched} matched → {out_path}")
+          with open(out_path, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=all_keys, extrasaction="ignore")
+            writer.writeheader()
+            for row in matched_rows:
+              writer.writerow({k: row.get(k, "") for k in all_keys})
+
+          print(f"Done: {len(data)} total, {len(matched_rows)} matched → {out_path}")
           EOF
       - name: Commit and push
         run: |
