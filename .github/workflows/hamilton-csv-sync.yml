@@ -10,35 +10,16 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install dependencies
         run: pip install requests
-      - name: Find Hamilton CSV URL
+      - name: Parse explorer page for data URLs
         run: |
           python3 - <<'EOF'
-          import requests
+          import requests, re
 
-          headers = {"User-Agent": "Mozilla/5.0"}
-          candidates = [
+          r = requests.get(
             "https://data.thepublicrecord.ca/buildingpermits/explorer",
-            "https://data.thepublicrecord.ca/buildingpermits/api/permits.csv",
-            "https://data.thepublicrecord.ca/buildingpermits/api/all.csv",
-            "https://data.thepublicrecord.ca/buildingpermits/api/permits",
-            "https://data.thepublicrecord.ca/buildingpermits/api/export",
-            "https://data.thepublicrecord.ca/api/buildingpermits.csv",
-            "https://data.thepublicrecord.ca/api/permits.csv",
-            "https://data.thepublicrecord.ca/data/permits.csv",
-            "https://data.thepublicrecord.ca/data/buildingpermits.csv",
-            "https://data.thepublicrecord.ca/buildingpermits/download",
-            "https://data.thepublicrecord.ca/buildingpermits/download.csv",
-          ]
-          for url in candidates:
-            try:
-              r = requests.get(url, headers=headers, timeout=15, allow_redirects=False)
-              ct = r.headers.get("content-type","")
-              loc = r.headers.get("location","")
-              size = r.headers.get("content-length","?")
-              print(f"{r.status_code} | {ct[:50]} | size={size} | redir={loc[:60]} | {url}")
-              if r.status_code == 200 and "html" not in ct:
-                print(f"  *** FOUND: {url} ***")
-                print(f"  First 200 chars: {r.text[:200]}")
-            except Exception as e:
-              print(f"ERR | {url} | {e}")
+            headers={"User-Agent": "Mozilla/5.0"},
+            timeout=30
+          )
+          print(f"Status: {r.status_code}")
+          print(r.text)
           EOF
