@@ -38,9 +38,11 @@ jobs:
           for row in reader:
             total += 1
             desc = " ".join([
-              row.get("WORK_TYPE") or row.get("work_type") or row.get("TYPE") or row.get("type") or "",
-              row.get("DESCRIPTION") or row.get("description") or row.get("DESC") or "",
-              row.get("PROPOSED_USE") or row.get("proposed_use") or "",
+              row.get("SUBJECT") or "",
+              row.get("Purpose") or "",
+              row.get("ActualUse") or "",
+              row.get("CATEGORY") or "",
+              row.get("type") or "",
             ]).lower()
             if any(t in desc for t in MED_TERMS):
               for k in row.keys():
