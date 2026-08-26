@@ -22,7 +22,7 @@ jobs:
             "health care service","health care","veterinary","veterinarian",
             "animal hospital","pet clinic","animal clinic","animal care","vet clinic",
           ]
-          url = "https://opendata.victoria.ca/api/download/v1/items/b4db2c27a1d14d59a7d7901ba77f16ce/csv?layers=0"
+          url = "https://open-vicmap.opendata.arcgis.com/api/download/v1/items/b4db2c27a1d14d59a7d7901ba77f16ce/csv?layers=0"
           print("Downloading Victoria building permits...")
           r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=300, stream=True)
           print(f"Status: {r.status_code} Content-Type: {r.headers.get('content-type','')}")
