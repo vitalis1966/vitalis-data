@@ -14,6 +14,7 @@ jobs:
         run: |
           python3 - <<'EOF'
           import requests, csv, io, os
+          from datetime import datetime, timedelta
           MED_TERMS = [
             "medical","physician","dental","clinic","health centre","health center",
             "optom","physiotherapy","pharmacy","chiropractic","radiolog","diagnostic",
@@ -53,6 +54,10 @@ jobs:
           if all_keys:
             # Keep only last 12 months to minimize edge function processing time
           from datetime import datetime, timedelta
+          cutoff = (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")
+          matched_rows = [r for r in matched_rows if (r.get("Date_of_Permit_Issuance") or "")[:10].replace("/","-") >= cutoff]
+          print(f"After date filter: {len(matched_rows)} rows (cutoff: {cutoff})")
+
           cutoff = (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")
           matched_rows = [r for r in matched_rows if (r.get("Date_of_Permit_Issuance") or "")[:10].replace("/","-") >= cutoff]
           print(f"After date filter: {len(matched_rows)} rows (cutoff: {cutoff})")
