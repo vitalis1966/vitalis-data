@@ -10,16 +10,24 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install dependencies
         run: pip install requests
-      - name: Parse explorer page for data URLs
+      - name: Find data file URL
         run: |
           python3 - <<'EOF'
           import requests, re
 
+          headers = {"User-Agent": "Mozilla/5.0"}
+
+          # Fetch the permits-lib.js to find the data file URL
           r = requests.get(
-            "https://data.thepublicrecord.ca/buildingpermits/explorer",
-            headers={"User-Agent": "Mozilla/5.0"},
-            timeout=30
+            "https://data.thepublicrecord.ca/buildingpermits/lib/permits-lib.js?v=2026-07.1",
+            headers=headers, timeout=30
           )
-          print(f"Status: {r.status_code}")
-          print(r.text)
+          print(f"permits-lib.js status: {r.status_code}")
+          if r.status_code == 200:
+            # Look for fetch() calls or data file references
+            urls = re.findall(r'''['"`]([^'"`]*\.(?:json|csv|bin|gz|ndjson|parquet)[^'"`]*)['"`]''', r.text)
+            print("Data file candidates:", urls[:20])
+            # Also print first 2000 chars
+            print("\nFirst 2000 chars of permits-lib.js:")
+            print(r.text[:2000])
           EOF
