@@ -10,24 +10,20 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install dependencies
         run: pip install requests
-      - name: Find data file URL
+      - name: Decode Hamilton permits
         run: |
           python3 - <<'EOF'
-          import requests, re
+          import requests, json, csv, os
 
           headers = {"User-Agent": "Mozilla/5.0"}
 
-          # Fetch the permits-lib.js to find the data file URL
+          # Fetch the encoded data file
           r = requests.get(
-            "https://data.thepublicrecord.ca/buildingpermits/lib/permits-lib.js?v=2026-07.1",
-            headers=headers, timeout=30
+            "https://data.thepublicrecord.ca/buildingpermits/data/permits.json?v=2026-07.1",
+            headers=headers, timeout=60
           )
-          print(f"permits-lib.js status: {r.status_code}")
-          if r.status_code == 200:
-            # Look for fetch() calls or data file references
-            urls = re.findall(r'''['"`]([^'"`]*\.(?:json|csv|bin|gz|ndjson|parquet)[^'"`]*)['"`]''', r.text)
-            print("Data file candidates:", urls[:20])
-            # Also print first 2000 chars
-            print("\nFirst 2000 chars of permits-lib.js:")
-            print(r.text[:2000])
+          print(f"permits.json status: {r.status_code}, size: {len(r.content)} bytes")
+          d = r.json()
+          print(f"Top-level keys: {list(d.keys())[:20]}")
+          print(f"Sample of d: {str(d)[:500]}")
           EOF
