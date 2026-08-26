@@ -1,0 +1,67 @@
+name: Sync Halifax Building Permits CSV
+on:
+  schedule:
+    - cron: '0 7 * * 3'
+  workflow_dispatch:
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: pip install requests
+      - name: Download Halifax Building Permits
+        run: |
+          python3 - <<'EOF'
+          import requests, csv, io, os
+          MED_TERMS = [
+            "medical","physician","dental","clinic","health centre","health center",
+            "optom","physiotherapy","pharmacy","chiropractic","radiolog","diagnostic",
+            "laboratory","outpatient","nursing","ophthalmolog","physio","audiolog",
+            "speech therapy","medical building","doctor","allied health",
+            "health care service","health care","veterinary","veterinarian",
+            "animal hospital","pet clinic","animal clinic","animal care","vet clinic",
+          ]
+          url = "https://data-hrm.hub.arcgis.com/api/download/v1/items/pplc-building-permits/csv?layers=0"
+          print("Downloading Halifax building permits...")
+          r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=300, stream=True)
+          print(f"Status: {r.status_code} Content-Type: {r.headers.get('content-type','')}")
+          r.raise_for_status()
+          os.makedirs("halifax", exist_ok=True)
+          content = r.content.decode("utf-8-sig")
+          reader = csv.DictReader(io.StringIO(content))
+          print(f"Headers: {reader.fieldnames}")
+          all_keys = []
+          seen_keys = set()
+          matched_rows = []
+          total = 0
+          for row in reader:
+            total += 1
+            desc = " ".join([
+              row.get("WORK_TYPE") or row.get("work_type") or row.get("PERMITTYPE") or "",
+              row.get("DESCRIPTION") or row.get("description") or "",
+              row.get("PROPOSED_USE") or row.get("proposed_use") or "",
+            ]).lower()
+            if any(t in desc for t in MED_TERMS):
+              for k in row.keys():
+                if k not in seen_keys:
+                  all_keys.append(k)
+                  seen_keys.add(k)
+              matched_rows.append(row)
+          if all_keys:
+            with open("halifax/BuildingPermits.csv", "w", newline="", encoding="utf-8") as f:
+              writer = csv.DictWriter(f, fieldnames=all_keys, extrasaction="ignore")
+              writer.writeheader()
+              for row in matched_rows:
+                writer.writerow({k: row.get(k, "") for k in all_keys})
+          print(f"Done: {total} total, {len(matched_rows)} matched")
+          EOF
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add halifax/
+          git stash || true
+          git pull --rebase origin main
+          git stash pop || true
+          git diff --staged --quiet || (git commit -m "update halifax permits" && git push) || true
