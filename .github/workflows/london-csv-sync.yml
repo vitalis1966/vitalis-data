@@ -65,7 +65,7 @@ jobs:
 
           print(f"Done: {total} total, {len(matched_rows)} matched → {out_path}")
           EOF
-      - name: Commit and push
+       - name: Commit and push
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -73,4 +73,4 @@ jobs:
           git stash || true
           git pull --rebase origin main
           git stash pop || true
-          git diff --staged --quiet || (git commit -m "Auto-update London building permits CSV" && git push)ß
+          git diff --staged --quiet || git commit -m "update london permits" && git push || true
