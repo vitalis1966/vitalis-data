@@ -73,4 +73,4 @@ jobs:
           git stash || true
           git pull --rebase origin main
           git stash pop || true
-          git diff --staged --quiet || (git commit -m "Auto-update London ON building permits CSV" && git push)ß
+          git diff --staged --quiet || (git commit -m "Auto-update London building permits CSV" && git push)ß
