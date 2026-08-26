@@ -51,7 +51,13 @@ jobs:
                   seen_keys.add(k)
               matched_rows.append(row)
           if all_keys:
-            with open("halifax/BuildingPermits.csv", "w", newline="", encoding="utf-8") as f:
+            # Keep only last 12 months to minimize edge function processing time
+          from datetime import datetime, timedelta
+          cutoff = (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")
+          matched_rows = [r for r in matched_rows if (r.get("Date_of_Permit_Issuance") or "")[:10].replace("/","-") >= cutoff]
+          print(f"After date filter: {len(matched_rows)} rows (cutoff: {cutoff})")
+
+          with open("halifax/BuildingPermits.csv", "w", newline="", encoding="utf-8") as f:
               writer = csv.DictWriter(f, fieldnames=all_keys, extrasaction="ignore")
               writer.writeheader()
               for row in matched_rows:
