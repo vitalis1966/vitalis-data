@@ -1,0 +1,74 @@
+name: Sync Vancouver Business Licences CSV
+on:
+  schedule:
+    - cron: '0 8 * * 3'   # Every Wednesday 8am UTC
+  workflow_dispatch:
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: pip install requests
+      - name: Download Vancouver Business Licences
+        run: |
+          python3 - <<'EOF'
+          import requests, csv, io, os
+
+          HEALTH_TYPES = [
+            "physician", "surgeon", "medical", "dental", "dentist", "optom",
+            "physiotherapy", "pharmacy", "chiropractic", "radiolog", "diagnostic",
+            "laboratory", "nursing", "ophthalmolog", "physio", "audiolog",
+            "speech therapy", "health", "clinic", "wellness", "rehab", "therapy",
+            "veterinary", "veterinarian", "animal hospital", "pet", "animal care",
+          ]
+
+          url = "https://opendata.vancouver.ca/api/explore/v2.1/catalog/datasets/business-licences/exports/csv?lang=en&timezone=America%2FVancouver&use_labels=true&delimiter=%2C"
+          print("Downloading Vancouver business licences...")
+          r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=300, stream=True)
+          print(f"Status: {r.status_code}")
+          r.raise_for_status()
+
+          os.makedirs("vancouver", exist_ok=True)
+          out_path = "vancouver/BusinessLicences.csv"
+
+          content = r.content.decode("utf-8-sig")
+          reader = csv.DictReader(io.StringIO(content))
+          matched = 0
+          total = 0
+          all_keys = []
+          seen_keys = set()
+          matched_rows = []
+
+          for row in reader:
+            total += 1
+            btype = (row.get("BusinessType") or row.get("businesstype") or "").lower()
+            bsubtype = (row.get("BusinessSubType") or row.get("businesssubtype") or "").lower()
+            bname = (row.get("BusinessName") or row.get("businessname") or "").lower()
+            combined = f"{btype} {bsubtype} {bname}"
+            if any(t in combined for t in HEALTH_TYPES):
+              for k in row.keys():
+                if k not in seen_keys:
+                  all_keys.append(k)
+                  seen_keys.add(k)
+              matched_rows.append(row)
+              matched += 1
+
+          with open(out_path, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=all_keys, extrasaction="ignore")
+            writer.writeheader()
+            for row in matched_rows:
+              writer.writerow({k: row.get(k, "") for k in all_keys})
+
+          print(f"Done: {total} total, {matched} matched → {out_path}")
+          EOF
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add vancouver/
+          git stash
+          git pull --rebase origin main
+          git stash pop
+          git diff --staged --quiet || git commit -m "Auto-update Vancouver business licences CSV"
+          git push
