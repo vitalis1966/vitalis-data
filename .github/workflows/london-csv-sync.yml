@@ -10,11 +10,10 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install dependencies
         run: pip install requests
-      - name: Download London ON Building Permits
+      - name: Download London Building Permits
         run: |
           python3 - <<'EOF'
           import requests, csv, io, os
-
           MED_TERMS = [
             "medical","physician","dental","clinic","health centre","health center",
             "optom","physiotherapy","pharmacy","chiropractic","radiolog","diagnostic",
@@ -23,26 +22,20 @@ jobs:
             "health care service","health care","veterinary","veterinarian",
             "animal hospital","pet clinic","animal clinic","animal care","vet clinic",
           ]
-
-          # ArcGIS Hub CSV export — London ON building permits item cb618c6b5f8f46b696674e74a3fb5b2d
           url = "https://opendata.london.ca/api/download/v1/items/cb618c6b5f8f46b696674e74a3fb5b2d/csv?layers=0"
-          print(f"Downloading London ON building permits...")
+          print("Downloading London ON building permits...")
           r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=300, stream=True)
           print(f"Status: {r.status_code} Content-Type: {r.headers.get('content-type','')}")
           r.raise_for_status()
-
           os.makedirs("london", exist_ok=True)
           out_path = "london/BuildingPermits.csv"
-
           content = r.content.decode("utf-8-sig")
           reader = csv.DictReader(io.StringIO(content))
           print(f"Headers: {reader.fieldnames}")
-
           all_keys = []
           seen_keys = set()
           matched_rows = []
           total = 0
-
           for row in reader:
             total += 1
             desc = " ".join([
@@ -56,16 +49,14 @@ jobs:
                   all_keys.append(k)
                   seen_keys.add(k)
               matched_rows.append(row)
-
           with open(out_path, "w", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(f, fieldnames=all_keys, extrasaction="ignore")
             writer.writeheader()
             for row in matched_rows:
               writer.writerow({k: row.get(k, "") for k in all_keys})
-
-          print(f"Done: {total} total, {len(matched_rows)} matched → {out_path}")
+          print(f"Done: {total} total, {len(matched_rows)} matched")
           EOF
-       - name: Commit and push
+      - name: Commit and push
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -73,4 +64,4 @@ jobs:
           git stash || true
           git pull --rebase origin main
           git stash pop || true
-          git diff --staged --quiet || git commit -m "update london permits" && git push || true
+          git diff --staged --quiet || (git commit -m "update london permits" && git push) || true
