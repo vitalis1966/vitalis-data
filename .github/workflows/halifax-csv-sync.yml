@@ -22,7 +22,7 @@ jobs:
             "health care service","health care","veterinary","veterinarian",
             "animal hospital","pet clinic","animal clinic","animal care","vet clinic",
           ]
-          url = "https://data-hrm.hub.arcgis.com/api/download/v1/items/pplc-building-permits/csv?layers=0"
+          url = "https://data-hrm.hub.arcgis.com/api/download/v1/items/6cef25e4172e4466a1eb8d3fd794f571/csv?layers=0"
           print("Downloading Halifax building permits...")
           r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=300, stream=True)
           print(f"Status: {r.status_code} Content-Type: {r.headers.get('content-type','')}")
