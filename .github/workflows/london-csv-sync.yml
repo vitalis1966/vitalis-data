@@ -27,6 +27,16 @@ jobs:
           r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=300, stream=True)
           print(f"Status: {r.status_code} Content-Type: {r.headers.get('content-type','')}")
           r.raise_for_status()
+          # Print headers and first 3 rows for diagnostics
+          content = r.content.decode("utf-8-sig")
+          reader = csv.DictReader(io.StringIO(content))
+          print(f"Headers: {reader.fieldnames}")
+          for i, row in enumerate(reader):
+            if i < 3:
+              print(f"Row {i}: {dict(row)}")
+            else:
+              break
+          import sys; sys.exit(0)
           os.makedirs("london", exist_ok=True)
           out_path = "london/BuildingPermits.csv"
           content = r.content.decode("utf-8-sig")
