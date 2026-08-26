@@ -1,0 +1,35 @@
+name: Sync Hamilton Building Permits CSV
+on:
+  schedule:
+    - cron: '0 7 * * 3'
+  workflow_dispatch:
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: pip install requests
+      - name: Find Hamilton CSV URL
+        run: |
+          python3 - <<'EOF'
+          import requests
+
+          base = "https://data.thepublicrecord.ca/buildingpermits"
+          candidates = [
+            f"{base}/permits-all.csv",
+            f"{base}/all.csv",
+            f"{base}/data.csv",
+            f"{base}/export.csv",
+            f"{base}/hamilton-building-permits.csv",
+            f"{base}/permits.csv",
+            f"{base}/permits.geojson",
+            f"{base}/hamilton.csv",
+            f"{base}/hamilton-permits.csv",
+          ]
+          for url in candidates:
+            r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=30, allow_redirects=False)
+            ct = r.headers.get("content-type","")
+            loc = r.headers.get("location","")
+            print(f"{r.status_code} | {url} | {ct[:60]} | redirect→{loc[:80]}")
+          EOF
