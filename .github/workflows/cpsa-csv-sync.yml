@@ -65,9 +65,18 @@ jobs:
           iPhone = headers.index("phone")
           iDisc  = headers.index("practice discipline")
 
+          def normalize_name(raw: str) -> str:
+              raw = raw.strip()
+              if "," not in raw:
+                  return raw
+              parts = raw.split(",", 1)
+              last = parts[0].strip()
+              rest = parts[1].strip()
+              return f"{rest} {last}".strip()
+
           current = {}  # key: "fullname||city" → dict
           for row in rows[1:]:
-              name = str(row[iName] or "").strip()
+              name = normalize_name(str(row[iName] or ""))
               addr = str(row[iAddr] or "").strip()
               city = str(row[iCity] or "").strip()
               if not name or not addr or not city: continue
@@ -132,17 +141,22 @@ jobs:
               print("No changes — skipping edge function call")
               exit(0)
 
-          # 5. POST changes to edge function
+          # 5. POST changes in batches of 200
           print("Posting changes to edge function...")
-          r = requests.post(
-              f"{SUPABASE_URL}/functions/v1/vitalisit-cpsa-sync",
-              headers=HEADERS,
-              json={"changes": changes, "today": today},
-              timeout=120,
-          )
-          print(f"Edge function response: {r.status_code} {r.text}")
-          if not r.ok:
-              exit(1)
+          BATCH_SIZE = 200
+          for i in range(0, len(changes), BATCH_SIZE):
+              batch = changes[i:i + BATCH_SIZE]
+              print(f"  Posting batch {i//BATCH_SIZE + 1}/{-(-len(changes)//BATCH_SIZE)} ({len(batch)} records)...")
+              r = requests.post(
+                  f"{SUPABASE_URL}/functions/v1/vitalisit-cpsa-sync",
+                  headers=HEADERS,
+                  json={"changes": batch, "today": today},
+                  timeout=120,
+              )
+              print(f"  Response: {r.status_code} {r.text}")
+              if not r.ok:
+                  exit(1)
+          print("All batches posted successfully")
 
           EOF
 
