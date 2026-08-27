@@ -50,6 +50,6 @@ jobs:
           curl -fsSL \
             -X POST \
             -H "Content-Type: application/json" \
-            -H "Authorization: Bearer ${{ secrets.eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlsYmhwaHJleXZhb29taHB2YXhpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMwMDQwODAsImV4cCI6MjA4ODU4MDA4MH0.XWJxYAndKB_Xs2DE1BkN_7t7YU94JPMEepMYTvQMK_c }}" \
-            "${{ secrets.https://ilbhphreyvaoomhpvaxi.supabase.co }}/functions/v1/vitalisit-cpsa-sync" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            "https://ilbhphreyvaoomhpvaxi.supabase.co/functions/v1/vitalisit-cpsa-sync" \
             -d '{}'
