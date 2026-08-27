@@ -2,28 +2,54 @@ name: Sync CPSA Physician CSV
 
 on:
   schedule:
-    - cron: '0 6 * * 1'   # Every Monday at 06:00 UTC
+    - cron: '0 7 * * 1'    # Every Monday 07:00 UTC
   workflow_dispatch:
 
 jobs:
-  sync:
+  convert-and-sync:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download CPSA Physician Directory CSV
-        run: |
-          mkdir -p cpsa
-          curl -fL \
-            "https://search.cpsa.ca/api/PhysicianSearch/ExportData?format=csv&province=AB" \
-            -H "Accept: text/csv" \
-            -o cpsa/Physicians.csv
-          echo "Downloaded $(wc -l < cpsa/Physicians.csv) rows"
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
 
-      - name: Commit and push
+      - name: Install dependencies
+        run: pip install openpyxl
+
+      - name: Convert XLSX to CSV
+        run: |
+          python3 - <<'EOF'
+          import openpyxl, csv, os
+
+          wb = openpyxl.load_workbook('cpsa/CPSA_Physicians_Full_Directory.xlsx', read_only=True, data_only=True)
+          ws = wb['Physicians']
+
+          os.makedirs('cpsa', exist_ok=True)
+          with open('cpsa/Physicians.csv', 'w', newline='', encoding='utf-8') as f:
+              writer = csv.writer(f)
+              for row in ws.iter_rows(values_only=True):
+                  writer.writerow(['' if v is None else str(v) for v in row])
+
+          wb.close()
+          print("Done — wrote cpsa/Physicians.csv")
+          EOF
+
+      - name: Commit CSV
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add cpsa/Physicians.csv
-          git diff --staged --quiet || git commit -m "chore: update CPSA physician data $(date -u +%Y-%m-%d)"
+          git diff --staged --quiet || git commit -m "chore: update CPSA physicians CSV $(date -u +%Y-%m-%d)"
           git push
+
+      - name: Trigger Supabase sync
+        run: |
+          curl -fsSL \
+            -X POST \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${{ secrets.eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlsYmhwaHJleXZhb29taHB2YXhpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMwMDQwODAsImV4cCI6MjA4ODU4MDA4MH0.XWJxYAndKB_Xs2DE1BkN_7t7YU94JPMEepMYTvQMK_c }}" \
+            "${{ secrets.https://ilbhphreyvaoomhpvaxi.supabase.co }}/functions/v1/vitalisit-cpsa-sync" \
+            -d '{}'
