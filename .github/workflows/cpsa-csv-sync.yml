@@ -47,8 +47,8 @@ jobs:
 
       - name: Trigger Supabase sync
         run: |
-          curl -fsSL \
-            -X POST \
+          curl -X POST \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
-            -d '{}'
+            -d '{}' \
+            "https://ilbhphreyvaoomhpvaxi.supabase.co/functions/v1/vitalisit-cpsa-sync"
