@@ -6,10 +6,12 @@ on:
   workflow_dispatch:
 
 jobs:
-  convert-and-sync:
+  convert-diff-sync:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -17,24 +19,131 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install openpyxl
+        run: pip install openpyxl requests
 
-      - name: Convert XLSX to CSV
+      - name: Convert XLSX to CSV and diff
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           python3 - <<'EOF'
-          import openpyxl, csv, os
+          import openpyxl, csv, os, json, requests
 
-          wb = openpyxl.load_workbook('cpsa/CPSA_Physicians_Full_Directory.xlsx', read_only=True, data_only=True)
-          ws = wb['Physicians']
+          SUPABASE_URL = "https://ilbhphreyvaoomhpvaxi.supabase.co"
+          SERVICE_KEY  = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
+          HEADERS      = {"Authorization": f"Bearer {SERVICE_KEY}", "Content-Type": "application/json"}
 
-          os.makedirs('cpsa', exist_ok=True)
-          with open('cpsa/Physicians.csv', 'w', newline='', encoding='utf-8') as f:
-              writer = csv.writer(f)
-              for row in ws.iter_rows(values_only=True):
-                  writer.writerow(['' if v is None else str(v) for v in row])
+          SKIP = {"none", "supervised practice only", "clinical assistant & surgical assistant", "physician assistant"}
 
+          def classify(discipline):
+              if not discipline: return None
+              d = discipline.lower()
+              if any(s in d for s in SKIP): return None
+              if "dental" in d or "dentist" in d: return "dental"
+              if "veterinary" in d: return "veterinary"
+              return "medical"
+
+          # 1. Convert XLSX → CSV
+          print("Converting XLSX to CSV...")
+          wb = openpyxl.load_workbook("cpsa/CPSA_Physicians_Full_Directory.xlsx", read_only=True, data_only=True)
+          ws = wb["Physicians"]
+          rows = list(ws.iter_rows(values_only=True))
           wb.close()
-          print("Done — wrote cpsa/Physicians.csv")
+
+          with open("cpsa/Physicians.csv", "w", newline="", encoding="utf-8") as f:
+              writer = csv.writer(f)
+              for row in rows:
+                  writer.writerow(["" if v is None else str(v) for v in row])
+          print(f"Wrote {len(rows)-1} physician rows to CSV")
+
+          # 2. Build current address map from CSV
+          headers = [str(h).lower().strip() for h in rows[0]]
+          iName  = headers.index("full name")
+          iAddr  = headers.index("address")
+          iCity  = headers.index("city")
+          iProv  = headers.index("province")
+          iPost  = headers.index("postal code")
+          iPhone = headers.index("phone")
+          iDisc  = headers.index("practice discipline")
+
+          current = {}  # key: "fullname||city" → dict
+          for row in rows[1:]:
+              name = str(row[iName] or "").strip()
+              addr = str(row[iAddr] or "").strip()
+              city = str(row[iCity] or "").strip()
+              if not name or not addr or not city: continue
+              ptype = classify(str(row[iDisc] or ""))
+              if not ptype: continue
+              key = f"{name}||{city}"
+              current[key] = {
+                  "full_name":     name,
+                  "address":       addr,
+                  "city":          city,
+                  "province":      str(row[iProv] or "AB").strip() or "AB",
+                  "postal_code":   str(row[iPost] or "").strip() or None,
+                  "phone":         str(row[iPhone] or "").strip() or None,
+                  "discipline":    str(row[iDisc] or "").strip(),
+                  "practice_type": ptype,
+              }
+          print(f"Qualifying physicians with address: {len(current)}")
+
+          # 3. Load previous snapshot from Supabase
+          print("Loading previous snapshots...")
+          prev = {}
+          offset = 0
+          while True:
+              r = requests.get(
+                  f"{SUPABASE_URL}/rest/v1/siteiq_cpsa_physician_snapshots",
+                  headers={**HEADERS, "apikey": SERVICE_KEY},
+                  params={
+                      "select": "full_name,city,clinic_address",
+                      "order":  "snapshot_date.desc",
+                      "limit":  "1000",
+                      "offset": str(offset),
+                  }
+              )
+              batch = r.json()
+              if not batch: break
+              for s in batch:
+                  key = f"{s['full_name']}||{s['city'] or ''}"
+                  if key not in prev:
+                      prev[key] = s["clinic_address"] or ""
+              if len(batch) < 1000: break
+              offset += 1000
+          print(f"Loaded {len(prev)} previous snapshots")
+
+          # 4. Diff
+          changes = []
+          today = __import__("datetime").date.today().isoformat()
+          for key, c in current.items():
+              prev_addr = prev.get(key)
+              is_new     = prev_addr is None
+              is_changed = prev_addr is not None and prev_addr != "" and prev_addr != c["address"]
+              if not is_new and not is_changed: continue
+              changes.append({
+                  **c,
+                  "signal":       "new_registration" if is_new else "address_change",
+                  "prev_address": None if is_new else prev_addr,
+                  "source_date":  today,
+              })
+
+          print(f"Changes detected: {len(changes)} ({sum(1 for c in changes if c['signal']=='new_registration')} new, {sum(1 for c in changes if c['signal']=='address_change')} changed)")
+
+          if not changes:
+              print("No changes — skipping edge function call")
+              exit(0)
+
+          # 5. POST changes to edge function
+          print("Posting changes to edge function...")
+          r = requests.post(
+              f"{SUPABASE_URL}/functions/v1/vitalisit-cpsa-sync",
+              headers=HEADERS,
+              json={"changes": changes, "today": today},
+              timeout=120,
+          )
+          print(f"Edge function response: {r.status_code} {r.text}")
+          if not r.ok:
+              exit(1)
+
           EOF
 
       - name: Commit CSV
@@ -44,11 +153,3 @@ jobs:
           git add cpsa/Physicians.csv
           git diff --staged --quiet || git commit -m "chore: update CPSA physicians CSV $(date -u +%Y-%m-%d)"
           git push
-
-      - name: Trigger Supabase sync
-        run: |
-          curl -X POST \
-            -H "Content-Type: application/json" \
-            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
-            -d '{}' \
-            "https://ilbhphreyvaoomhpvaxi.supabase.co/functions/v1/vitalisit-cpsa-sync"
