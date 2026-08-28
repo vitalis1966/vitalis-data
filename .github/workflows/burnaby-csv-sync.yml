@@ -36,5 +36,6 @@ jobs:
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
             "https://ilbhphreyvaoomhpvaxi.supabase.co/functions/v1/vitalisit-funnel-sync" \
-            -d '{}'
+            -d '{}' \
+            --max-time 10 || true \
       
