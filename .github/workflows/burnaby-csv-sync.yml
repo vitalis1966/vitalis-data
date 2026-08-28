@@ -76,7 +76,7 @@ jobs:
                   date_match = re.search(r'(\d{4}-\d{2})/(\w+)-(\d+)-(\d{4})\.pdf', pdf_url)
                   permit_date = date_match.group(0)[:10] if date_match else "unknown"
 
-                  with pdfplumber.open(requests.get(pdf_url, stream=True).raw) as pdf:
+                  with pdfplumber.open(io.BytesIO(r.content)) as pdf:
                       for page in pdf.pages:
                           table = page.extract_table()
                           if not table:
