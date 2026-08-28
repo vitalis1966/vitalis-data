@@ -29,3 +29,12 @@ jobs:
           git add burnaby/BuildingPermits.csv
           git diff --staged --quiet || git commit -m "chore: update Burnaby permits $(date -u +%Y-%m-%d)"
           git push
+      
+      - name: Trigger Supabase sync
+        run: |
+          curl -X POST \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            "https://ilbhphreyvaoomhpvaxi.supabase.co/functions/v1/vitalisit-funnel-sync" \
+            -d '{}'
+      
