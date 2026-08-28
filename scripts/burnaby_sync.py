@@ -59,6 +59,8 @@ for pdf_url in pdf_urls:
                     if not block.strip() or not re.search(r'BLD\d{2}-\d{5}', block):
                         continue
 
+                    lines = block.strip().split('\n')
+
                     # Extract permit number
                     permit_match = re.search(r'(BLD\d{2}-\d{5})', block)
                     permit_number = permit_match.group(1) if permit_match else ""
@@ -71,11 +73,12 @@ for pdf_url in pdf_urls:
                     value_match = re.search(r'\$[\d,]+\.\d{2}', block)
                     value = value_match.group(0) if value_match else ""
 
-                    # Extract address — line immediately before the permit block
-                    # Address appears in text before the BLD number on the same logical line
-                    # Look for street address pattern (number + street name)
-                    addr_match = re.search(r'(\d+\s*[-–]?\s*\d*\s+[A-Z][A-Z\s]+(?:ST|AVE|DR|RD|WAY|BLVD|LANE|CRT|PL|PLACE|ROAD|STREET|AVENUE|DRIVE|COURT|CLOSE|CRES|CRESCENT)[^\n]*)', block, re.IGNORECASE)
-                    address = addr_match.group(1).strip() if addr_match else lines[0].strip()
+                    # Extract address — prefer street pattern, fall back to first line
+                    addr_match = re.search(
+                        r'(\d+\s*[-–]?\s*\d*\s+[A-Z][A-Z\s]+(?:ST|AVE|DR|RD|WAY|BLVD|LANE|CRT|PL|PLACE|ROAD|STREET|AVENUE|DRIVE|COURT|CLOSE|CRES|CRESCENT)[^\n]*)',
+                        block, re.IGNORECASE
+                    )
+                    address = addr_match.group(1).strip() if addr_match else (lines[0].strip() if lines else "")
 
                     # Check if health-related (check full block text)
                     if is_health(block):
