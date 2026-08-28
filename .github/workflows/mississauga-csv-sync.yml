@@ -18,7 +18,7 @@ jobs:
           HTTP_CODE=$(curl -fsSL \
             -w "%{http_code}" \
             -o mississauga/BuildingPermits_raw.csv \
-            "https://opendata.arcgis.com/api/v3/datasets/978ce8c2c5844486b5d768420fa9c72d_0/downloads/data?format=csv&spatialRefId=4326")
+            "https://hub.arcgis.com/api/v3/datasets/978ce8c2c5844486b5d768420fa9c72d_0/downloads/data?format=csv&spatialRefId=4326")
           echo "HTTP status: $HTTP_CODE"
           wc -l mississauga/BuildingPermits_raw.csv
 
