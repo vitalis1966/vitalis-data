@@ -29,20 +29,3 @@ jobs:
           git add burnaby/BuildingPermits.csv
           git diff --staged --quiet || git commit -m "chore: update Burnaby permits $(date -u +%Y-%m-%d)"
           git push
-      
-      - name: Trigger Supabase sync
-        env:
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: |
-          python3 -c "
-          import requests, os
-          key = os.environ['SUPABASE_SERVICE_ROLE_KEY']
-          r = requests.post(
-              'https://ilbhphreyvaoomhpvaxi.supabase.co/functions/v1/vitalisit-funnel-sync',
-              headers={'Authorization': f'Bearer {key}', 'Content-Type': 'application/json'},
-              json={},
-              timeout=15,
-          )
-          print(r.status_code, r.text[:200])
-          " \
-      
