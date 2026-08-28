@@ -1,0 +1,40 @@
+name: Sync Mississauga Building Permits
+
+on:
+  schedule:
+    - cron: '0 5 * * 2'    # Every Tuesday 05:00 UTC
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download Mississauga building permits CSV
+        run: |
+          mkdir -p mississauga
+          echo "Downloading Mississauga building permits..."
+          HTTP_CODE=$(curl -fsSL \
+            -w "%{http_code}" \
+            -o mississauga/BuildingPermits_raw.csv \
+            "https://opendata.arcgis.com/api/v3/datasets/978ce8c2c5844486b5d768420fa9c72d_0/downloads/data?format=csv&spatialRefId=4326")
+          echo "HTTP status: $HTTP_CODE"
+          wc -l mississauga/BuildingPermits_raw.csv
+
+      - name: Show headers and sample
+        run: |
+          echo "=== HEADERS ==="
+          head -1 mississauga/BuildingPermits_raw.csv
+          echo "=== FIRST 3 ROWS ==="
+          head -4 mississauga/BuildingPermits_raw.csv | tail -3
+          echo "=== TOTAL ROWS ==="
+          wc -l mississauga/BuildingPermits_raw.csv
+
+      - name: Commit raw CSV
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add mississauga/BuildingPermits_raw.csv
+          git diff --staged --quiet || git commit -m "test: mississauga permits raw $(date -u +%Y-%m-%d)"
+          git push
