@@ -74,20 +74,15 @@ for pdf_url in pdf_urls:
                     value = value_match.group(0) if value_match else ""
 
                     # Extract address — prefer street pattern, fall back to first line
-                    # Address is on the line after the permit number line
-                    # Try lines[1] first, then fall back to regex search
+                    # Site address appears in the page text immediately BEFORE the permit number
+                    # Extract from original page text, not from the block
+                    permit_pos = text.find(permit_number)
                     address = ""
-                    if len(lines) > 1:
-                        candidate = lines[1].strip()
-                        # Validate it looks like a street address (starts with digits)
-                        if re.match(r'^\d+', candidate):
-                            address = candidate
-                    if not address:
-                        addr_match = re.search(
-                            r'((?:\d+\s*[-–]\s*)?\d+\s+[A-Z0-9][A-Z0-9\s]+(?:ST|AVE|DR|RD|WAY|BLVD|LANE|CRT|PL|PLACE|ROAD|STREET|AVENUE|DRIVE|COURT|CLOSE|CRES|CRESCENT)\b[^\n]*)',
-                            block, re.IGNORECASE
-                        )
-                        address = addr_match.group(1).strip() if addr_match else lines[0].strip()
+                    if permit_pos > 0:
+                        pre_text = text[:permit_pos].strip()
+                        pre_lines = [l.strip() for l in pre_text.split('\n') if l.strip()]
+                        if pre_lines:
+                            address = pre_lines[-1]  # last line before permit number
 
                     # Check if health-related (check full block text)
                     if is_health(block):
