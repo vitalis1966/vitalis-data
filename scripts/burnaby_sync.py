@@ -32,7 +32,6 @@ print(f"Generated {len(pdf_urls)} PDF URLs to check")
 
 os.makedirs("burnaby", exist_ok=True)
 all_rows = []
-debug_done = False
 
 for pdf_url in pdf_urls:
     print(f"Processing: {pdf_url}")
@@ -48,46 +47,46 @@ for pdf_url in pdf_urls:
         permit_date = f"{month_folder}-{int(day):02d}"
 
         with pdfplumber.open(io.BytesIO(r.content)) as pdf:
-            print(f"  Pages: {len(pdf.pages)}")
-            for page_num, page in enumerate(pdf.pages):
-                table = page.extract_table()
+            for page in pdf.pages:
                 text = page.extract_text()
+                if not text:
+                    continue
 
-                if not debug_done and page_num == 0:
-                    print(f"  DEBUG table rows: {len(table) if table else 'None'}")
-                    print(f"  DEBUG text (first 800 chars):")
-                    print(text[:800] if text else "  [no text]")
-                    debug_done = True
+                # Split into permit blocks — each starts with a permit number BLDxx-xxxxx
+                blocks = re.split(r'(?=BLD\d{2}-\d{5})', text)
 
-                if table and len(table) > 1:
-                    for row in table[1:]:
-                        if not row or all(c is None for c in row):
-                            continue
-                        row_text = " ".join(str(c or "") for c in row)
-                        if is_health(row_text):
-                            all_rows.append({
-                                "permit_date": permit_date,
-                                "address": str(row[0] or "").strip(),
-                                "permit_number": str(row[3] or "").strip() if len(row) > 3 else "",
-                                "permit_category": str(row[4] or "").strip() if len(row) > 4 else "",
-                                "type_of_change": str(row[5] or "").strip() if len(row) > 5 else "",
-                                "value_of_work": str(row[6] or "").strip() if len(row) > 6 else "",
-                                "full_text": row_text.strip(),
-                                "source_url": pdf_url,
-                            })
-                elif text:
-                    for line in text.split("\n"):
-                        if is_health(line):
-                            all_rows.append({
-                                "permit_date": permit_date,
-                                "address": "",
-                                "permit_number": "",
-                                "permit_category": "",
-                                "type_of_change": "",
-                                "value_of_work": "",
-                                "full_text": line.strip(),
-                                "source_url": pdf_url,
-                            })
+                for block in blocks:
+                    if not block.strip() or not re.search(r'BLD\d{2}-\d{5}', block):
+                        continue
+
+                    # Extract permit number
+                    permit_match = re.search(r'(BLD\d{2}-\d{5})', block)
+                    permit_number = permit_match.group(1) if permit_match else ""
+
+                    # Extract description (text after "Description" label)
+                    desc_match = re.search(r'Description\s*\n(.+?)(?:\n[A-Z]|\Z)', block, re.DOTALL)
+                    description = desc_match.group(1).strip() if desc_match else ""
+
+                    # Extract value of work
+                    value_match = re.search(r'\$[\d,]+\.\d{2}', block)
+                    value = value_match.group(0) if value_match else ""
+
+                    # Extract address — first line before legal description
+                    lines = block.strip().split('\n')
+                    address = lines[0].strip() if lines else ""
+
+                    # Check if health-related (check full block text)
+                    if is_health(block):
+                        all_rows.append({
+                            "permit_date": permit_date,
+                            "address": address,
+                            "permit_number": permit_number,
+                            "description": description,
+                            "value_of_work": value,
+                            "full_text": block.strip()[:500],
+                            "source_url": pdf_url,
+                        })
+                        print(f"  MATCH: {permit_number} — {address} — {description[:80]}")
 
     except Exception as e:
         print(f"  Error: {e}")
@@ -95,16 +94,16 @@ for pdf_url in pdf_urls:
 print(f"\nHealth-related permits found: {len(all_rows)}")
 
 outfile = "burnaby/BuildingPermits.csv"
-fieldnames = ["permit_date","address","permit_number","permit_category",
-              "type_of_change","value_of_work","full_text","source_url"]
+fieldnames = ["permit_date","address","permit_number","description",
+              "value_of_work","full_text","source_url"]
 
 existing = set()
 if os.path.exists(outfile):
     with open(outfile, newline="", encoding="utf-8") as f:
         for row in csv.DictReader(f):
-            existing.add(row.get("full_text",""))
+            existing.add(row.get("permit_number",""))
 
-new_rows = [r for r in all_rows if r["full_text"] not in existing]
+new_rows = [r for r in all_rows if r["permit_number"] not in existing]
 print(f"New rows to add: {len(new_rows)}")
 
 write_header = not os.path.exists(outfile)
