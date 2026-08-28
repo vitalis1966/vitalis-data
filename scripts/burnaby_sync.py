@@ -82,7 +82,9 @@ for pdf_url in pdf_urls:
                         pre_text = text[:permit_pos].strip()
                         pre_lines = [l.strip() for l in pre_text.split('\n') if l.strip()]
                         if pre_lines:
-                            address = pre_lines[-1]  # last line before permit number
+                            raw_addr = pre_lines[-1]
+                            # Strip legal description suffix (LOT: ... onwards)
+                            address = re.split(r'\s+LOT:', raw_addr, maxsplit=1)[0].strip()
 
                     # Check if health-related (check full block text)
                     if is_health(block):
