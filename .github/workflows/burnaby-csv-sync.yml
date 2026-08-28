@@ -31,11 +31,18 @@ jobs:
           git push
       
       - name: Trigger Supabase sync
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
-          curl -X POST \
-            -H "Content-Type: application/json" \
-            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
-            "https://ilbhphreyvaoomhpvaxi.supabase.co/functions/v1/vitalisit-funnel-sync" \
-            -d '{}' \
-            --max-time 10 || true \
+          python3 -c "
+          import requests, os
+          key = os.environ['SUPABASE_SERVICE_ROLE_KEY']
+          r = requests.post(
+              'https://ilbhphreyvaoomhpvaxi.supabase.co/functions/v1/vitalisit-funnel-sync',
+              headers={'Authorization': f'Bearer {key}', 'Content-Type': 'application/json'},
+              json={},
+              timeout=15,
+          )
+          print(r.status_code, r.text[:200])
+          " \
       
