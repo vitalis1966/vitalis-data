@@ -17,14 +17,13 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install pdfplumber requests beautifulsoup4
+        run: pip install pdfplumber requests
 
       - name: Download and parse Burnaby permits
         run: |
           python3 - <<'EOF'
-          import pdfplumber, requests, csv, os, re
+          import pdfplumber, requests, csv, os, re, io
           from datetime import datetime, timedelta
-          from bs4 import BeautifulSoup
 
           LISTING_URL = "https://www.burnaby.ca/services-and-payments/permits-and-applications/building-permits-issued-and-tabulation-reports"
 
