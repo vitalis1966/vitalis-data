@@ -40,23 +40,26 @@ jobs:
               t = text.lower()
               return any(kw in t for kw in HEALTH_KEYWORDS)
 
-          # Get listing page to find recent PDF URLs
-          print("Fetching listing page...")
-          resp = requests.get(LISTING_URL, timeout=30)
-          soup = BeautifulSoup(resp.text, "html.parser")
+          # Generate PDF URLs directly from date pattern (no scraping needed)
+          # URL format: /sites/default/files/acquiadam/YYYY-MM/Month-D-YYYY.pdf
+          MONTHS = ["January","February","March","April","May","June",
+                    "July","August","September","October","November","December"]
 
-          # Find all PDF links from the past 7 days
           today = datetime.utcnow()
           pdf_urls = []
-          for a in soup.find_all("a", href=True):
-              href = a["href"]
-              if ".pdf" in href.lower() and "acquiadam" in href:
-                  full_url = href if href.startswith("http") else f"https://www.burnaby.ca{href}"
-                  pdf_urls.append(full_url)
+          for days_back in range(7):
+              d = today - timedelta(days=days_back)
+              if d.weekday() >= 5:  # skip weekends
+                  continue
+              month_name = MONTHS[d.month - 1]
+              folder = f"{d.year}-{d.month:02d}"
+              filename = f"{month_name}-{d.day}-{d.year}.pdf"
+              url = f"https://www.burnaby.ca/sites/default/files/acquiadam/{folder}/{filename}"
+              pdf_urls.append(url)
 
-          # Limit to last 7 (one week of weekdays)
-          pdf_urls = pdf_urls[:7]
-          print(f"Found {len(pdf_urls)} recent PDFs")
+          print(f"Generated {len(pdf_urls)} PDF URLs to check")
+          for u in pdf_urls:
+              print(f"  {u}")
 
           os.makedirs("burnaby", exist_ok=True)
           all_rows = []
